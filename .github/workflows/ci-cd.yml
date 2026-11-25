@@ -75,6 +75,16 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.sha_tag }}
             ${{ env.IMAGE_NAME }}:${{ github.ref_name == 'main' && 'latest' || 'dev' }}
 
+      - name: Sync README to Docker Hub Overview
+        uses: peter-evans/dockerhub-description@v4
+        continue-on-error: true
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.IMAGE_NAME }}
+          short-description: "Frontend React + Vite + Nginx (runtime env-config) para Smart Table OS"
+          readme-filepath: ./README.md
+
   # ==========================================
   # 3. DEPLOY TO AZURE DEV
   # ==========================================
