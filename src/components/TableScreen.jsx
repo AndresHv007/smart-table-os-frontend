@@ -279,7 +279,7 @@ const TableScreen = () => {
             <div className="p-8 sm:p-10 liquid-scroll flex flex-col items-center">
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full liquid-glass-subtle text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300 mb-3">
                 <Sparkles size={12} />
-                <span>Mesa Interactiva</span>
+                <span>Mesa Interactiva · v2.0 Live</span>
               </div>
 
             <h1
