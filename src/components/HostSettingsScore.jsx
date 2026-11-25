@@ -1,28 +1,36 @@
 import React, { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trophy, Plus, Trash2 } from 'lucide-react';
+import { useScrollEffects } from '../hooks/useScrollEffects';
 
 const HostSettingsScore = ({ gameState, socket, onBack }) => {
   const score = gameState.modules.score;
   const [newTeamId, setNewTeamId] = useState(1);
 
+  const { scrollRef, isScrolled, scrollProgress, hasOverflow } = useScrollEffects([
+    score.mode,
+    score.endCondition?.type,
+    Object.keys(score.teams || {}).length,
+  ]);
+
   const updateScore = (updates) => {
     socket.emit('updateModules', { score: { ...score, ...updates } });
   };
 
-  const activeRoles = Object.keys(gameState.colors).filter(r => gameState.colors[r] !== null);
+  const activeRoles = Object.keys(gameState.colors).filter((r) => gameState.colors[r] !== null);
 
   const handleModeChange = (e) => {
     const mode = e.target.value;
-    updateScore({ mode });
-    if (mode === 'teams' && Object.keys(score.teams).length === 0) {
-      // Create initial teams
+    if (mode === 'teams' && Object.keys(score.teams || {}).length === 0) {
       updateScore({
+        mode,
         teams: {
           team1: { name: 'Equipo 1', members: [], colorRole: null },
-          team2: { name: 'Equipo 2', members: [], colorRole: null }
-        }
+          team2: { name: 'Equipo 2', members: [], colorRole: null },
+        },
       });
       setNewTeamId(3);
+    } else {
+      updateScore({ mode });
     }
   };
 
@@ -32,23 +40,20 @@ const HostSettingsScore = ({ gameState, socket, onBack }) => {
     updateScore({
       teams: {
         ...score.teams,
-        [id]: { name: `Equipo ${newTeamId}`, members: [], colorRole: null }
-      }
+        [id]: { name: `Equipo ${newTeamId}`, members: [], colorRole: null },
+      },
     });
   };
 
   const assignPlayerToTeam = (role, teamId) => {
     const newTeams = JSON.parse(JSON.stringify(score.teams));
-    
-    // Remove from other teams
-    Object.keys(newTeams).forEach(tId => {
-      newTeams[tId].members = newTeams[tId].members.filter(m => m !== role);
+
+    Object.keys(newTeams).forEach((tId) => {
+      newTeams[tId].members = newTeams[tId].members.filter((m) => m !== role);
     });
 
-    // Add to target team
     newTeams[teamId].members.push(role);
-    
-    // Set color if it's the first member
+
     if (newTeams[teamId].members.length === 1 && !newTeams[teamId].colorRole) {
       newTeams[teamId].colorRole = role;
     }
@@ -63,19 +68,47 @@ const HostSettingsScore = ({ gameState, socket, onBack }) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto">
-      <div className="flex items-center space-x-4 mb-6">
-        <button onClick={onBack} className="w-10 h-10 flex flex-shrink-0 items-center justify-center text-gray-400 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors">
-          <ArrowLeft size={20} />
-        </button>
-        <h2 className="text-xl font-bold text-white">Configurar Puntuación</h2>
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div
+        className={`relative z-20 px-5 liquid-header ${
+          isScrolled ? 'liquid-header-scrolled py-3' : 'py-4'
+        }`}
+      >
+        <div className="flex items-center gap-3.5">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Volver"
+            className="liquid-btn liquid-btn-glass w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-slate-300 hover:text-white"
+          >
+            <ArrowLeft size={19} />
+          </button>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+              <Trophy size={17} />
+            </span>
+            <h2 className="text-lg font-extrabold text-white tracking-tight truncate">
+              Configurar Puntuación
+            </h2>
+          </div>
+        </div>
+        {hasOverflow && (
+          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/5 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-300 to-emerald-400 origin-left transition-transform duration-75"
+              style={{ transform: `scaleX(${Math.max(0.03, scrollProgress)})` }}
+            />
+          </div>
+        )}
       </div>
 
-      <div className="space-y-6 pb-20">
-        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-          <label className="block text-gray-300 font-bold mb-2">Modo de Puntuación</label>
-          <select 
-            className="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 outline-none"
+      <div ref={scrollRef} className="flex-1 liquid-scroll px-5 pt-5 pb-20 space-y-4">
+        <div className="scroll-reveal-card liquid-glass p-5 rounded-2xl">
+          <label className="block text-slate-200 font-bold text-sm mb-2.5">
+            Modo de Puntuación
+          </label>
+          <select
+            className="liquid-input w-full rounded-xl p-3 text-sm font-semibold"
             value={score.mode}
             onChange={handleModeChange}
           >
@@ -86,54 +119,75 @@ const HostSettingsScore = ({ gameState, socket, onBack }) => {
         </div>
 
         {score.mode === 'teams' && (
-          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-            <h3 className="text-white font-bold mb-4">Equipos</h3>
-            <div className="space-y-4">
-              {Object.keys(score.teams).map(tId => {
+          <div className="scroll-reveal-card liquid-glass p-5 rounded-2xl">
+            <h3 className="text-white font-bold text-sm mb-3.5">Equipos</h3>
+            <div className="space-y-3">
+              {Object.keys(score.teams).map((tId) => {
                 const team = score.teams[tId];
                 return (
-                  <div key={tId} className="bg-gray-900 border border-gray-700 p-3 rounded-lg">
+                  <div key={tId} className="liquid-glass-subtle p-3.5 rounded-xl">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-white">{team.name}</span>
-                      <button onClick={() => removeTeam(tId)} className="text-red-500 text-xs">Eliminar</button>
+                      <span className="font-bold text-white text-sm">{team.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeTeam(tId)}
+                        className="text-rose-400 hover:text-rose-300 text-xs font-bold inline-flex items-center gap-1"
+                      >
+                        <Trash2 size={12} />
+                        <span>Eliminar</span>
+                      </button>
                     </div>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {team.members.map(m => (
-                        <span key={m} className="px-2 py-1 bg-gray-800 text-xs rounded text-gray-300">
+                    <div className="flex flex-wrap gap-1.5 mb-2.5">
+                      {team.members.map((m) => (
+                        <span
+                          key={m}
+                          className="px-2.5 py-1 bg-sky-500/15 border border-sky-400/25 text-xs font-bold rounded-full text-sky-200"
+                        >
                           {gameState.names[m] || m}
                         </span>
                       ))}
-                      {team.members.length === 0 && <span className="text-gray-500 text-xs italic">Vacío</span>}
+                      {team.members.length === 0 && (
+                        <span className="text-slate-500 text-xs italic">Vacío</span>
+                      )}
                     </div>
-                    <div className="flex flex-wrap gap-1 mt-2 border-t border-gray-800 pt-2">
-                      <span className="text-xs text-gray-500 w-full mb-1">Añadir jugador:</span>
-                      {activeRoles.filter(r => !team.members.includes(r)).map(r => (
-                        <button 
-                          key={r}
-                          onClick={() => assignPlayerToTeam(r, tId)}
-                          className="bg-gray-700 text-white text-xs px-2 py-1 rounded"
-                        >
-                          + {gameState.names[r] || r}
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap gap-1.5 mt-2 border-t border-white/10 pt-2.5">
+                      <span className="text-[11px] text-slate-400 w-full mb-0.5">
+                        Añadir jugador:
+                      </span>
+                      {activeRoles
+                        .filter((r) => !team.members.includes(r))
+                        .map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => assignPlayerToTeam(r, tId)}
+                            className="liquid-btn liquid-btn-glass text-white text-xs font-semibold px-2.5 py-1 rounded-lg"
+                          >
+                            + {gameState.names[r] || r}
+                          </button>
+                        ))}
                     </div>
                   </div>
                 );
               })}
-              <button 
+              <button
+                type="button"
                 onClick={addTeam}
-                className="w-full py-2 bg-gray-700 text-white rounded border border-gray-600 border-dashed"
+                className="liquid-btn liquid-btn-glass w-full py-2.5 text-slate-200 text-sm font-bold rounded-xl border-dashed flex items-center justify-center gap-1.5"
               >
-                + Añadir Nuevo Equipo
+                <Plus size={15} />
+                <span>Añadir Nuevo Equipo</span>
               </button>
             </div>
           </div>
         )}
 
-        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-          <label className="block text-gray-300 font-bold mb-2">Condición para Ganar</label>
-          <select 
-            className="w-full bg-gray-900 text-white rounded-lg p-3 pr-10 border border-gray-600 outline-none"
+        <div className="scroll-reveal-card liquid-glass p-5 rounded-2xl">
+          <label className="block text-slate-200 font-bold text-sm mb-2.5">
+            Condición para Ganar
+          </label>
+          <select
+            className="liquid-input w-full rounded-xl p-3 text-sm font-semibold"
             value={score.winCondition}
             onChange={(e) => updateScore({ winCondition: e.target.value })}
           >
@@ -142,11 +196,13 @@ const HostSettingsScore = ({ gameState, socket, onBack }) => {
           </select>
         </div>
 
-        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-          <label className="block text-gray-300 font-bold mb-2">Meta de Fin de Juego</label>
-          
-          <select 
-            className="w-full bg-gray-900 text-white rounded-lg p-3 pr-10 border border-gray-600 outline-none mb-3"
+        <div className="scroll-reveal-card liquid-glass p-5 rounded-2xl">
+          <label className="block text-slate-200 font-bold text-sm mb-2.5">
+            Meta de Fin de Juego
+          </label>
+
+          <select
+            className="liquid-input w-full rounded-xl p-3 text-sm font-semibold mb-3"
             value={score.endCondition?.type || 'none'}
             onChange={(e) => {
               const type = e.target.value;
@@ -165,45 +221,69 @@ const HostSettingsScore = ({ gameState, socket, onBack }) => {
           </select>
 
           {score.endCondition?.type === 'points' && (
-            <div className="flex space-x-2">
-              <select 
-                className="flex-1 bg-gray-900 text-white rounded-lg p-2 pr-8 border border-gray-600 outline-none text-sm"
+            <div className="flex gap-2">
+              <select
+                className="liquid-input flex-1 rounded-xl p-2.5 text-sm"
                 value={score.endCondition.direction}
-                onChange={(e) => updateScore({ endCondition: { ...score.endCondition, direction: e.target.value } })}
+                onChange={(e) =>
+                  updateScore({
+                    endCondition: { ...score.endCondition, direction: e.target.value },
+                  })
+                }
               >
                 <option value="above">Llegar a (o más)</option>
                 <option value="below">Bajar a (o menos)</option>
               </select>
-              <input 
+              <input
                 type="number"
-                className="w-20 bg-gray-900 text-white rounded-lg p-2 border border-gray-600 outline-none text-center"
+                className="liquid-input w-24 rounded-xl p-2.5 text-center font-bold tabular-nums"
                 value={score.endCondition.value}
-                onChange={(e) => updateScore({ endCondition: { ...score.endCondition, value: parseInt(e.target.value) || 0 } })}
+                onChange={(e) =>
+                  updateScore({
+                    endCondition: {
+                      ...score.endCondition,
+                      value: parseInt(e.target.value, 10) || 0,
+                    },
+                  })
+                }
               />
             </div>
           )}
 
           {score.endCondition?.type === 'rounds' && (
-            <div className="flex space-x-2 items-center">
-              <span className="flex-1 text-sm text-gray-400">Terminar después de la ronda:</span>
-              <input 
+            <div className="flex gap-3 items-center">
+              <span className="flex-1 text-xs text-slate-300">
+                Terminar después de la ronda:
+              </span>
+              <input
                 type="number"
-                className="w-20 bg-gray-900 text-white rounded-lg p-2 border border-gray-600 outline-none text-center"
+                className="liquid-input w-24 rounded-xl p-2.5 text-center font-bold tabular-nums"
                 value={score.endCondition.value}
-                onChange={(e) => updateScore({ endCondition: { ...score.endCondition, value: parseInt(e.target.value) || 0 } })}
+                onChange={(e) =>
+                  updateScore({
+                    endCondition: {
+                      ...score.endCondition,
+                      value: parseInt(e.target.value, 10) || 0,
+                    },
+                  })
+                }
               />
             </div>
           )}
         </div>
 
-        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-          <label className="block text-gray-300 font-bold mb-2">Puntuación Inicial</label>
-          <div className="text-xs text-gray-400 mb-3">Con cuántos puntos empiezan los jugadores o equipos.</div>
-          <input 
+        <div className="scroll-reveal-card liquid-glass p-5 rounded-2xl">
+          <label className="block text-slate-200 font-bold text-sm mb-1">
+            Puntuación Inicial
+          </label>
+          <div className="text-xs text-slate-400 mb-3">
+            Con cuántos puntos empiezan los jugadores o equipos.
+          </div>
+          <input
             type="number"
-            className="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 outline-none text-center"
+            className="liquid-input w-full rounded-xl p-3 text-center text-lg font-extrabold tabular-nums"
             value={score.initialScore !== undefined ? score.initialScore : 0}
-            onChange={(e) => updateScore({ initialScore: parseInt(e.target.value) || 0 })}
+            onChange={(e) => updateScore({ initialScore: parseInt(e.target.value, 10) || 0 })}
           />
         </div>
       </div>

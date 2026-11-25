@@ -1,13 +1,40 @@
-import React, { useEffect, useState } from 'react';
-import { Trophy, History, Medal, X } from 'lucide-react';
+import React, { useEffect, useId, useState } from 'react';
+import { Trophy, History, Medal, X, Plus, Tv } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
+import { useScrollEffects } from '../hooks/useScrollEffects';
+import LiquidModal from './ui/LiquidModal';
+import { useToast } from './ui/LiquidToast';
 
 const StatisticsScreen = ({ onClose, isTV = false }) => {
   const { socket, gameState } = useSocket();
+  const titleId = useId();
   const [stats, setStats] = useState({ leaderboard: [], history: [], profiles: [] });
   const [loading, setLoading] = useState(true);
+  const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
 
   const activeTab = gameState?.activeStatsTab || 'leaderboard';
+
+  const { scrollRef, resetScroll, isScrolled, scrollProgress, hasOverflow } = useScrollEffects([
+    activeTab,
+    loading,
+    stats.leaderboard.length,
+    stats.history.length,
+  ]);
+
+  useEffect(() => {
+    resetScroll();
+  }, [activeTab, resetScroll]);
+
+  useEffect(() => {
+    if (isTV) return;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) {
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isTV, onClose]);
 
   const handleTabClick = (tab) => {
     if (!isTV) {
@@ -17,11 +44,15 @@ const StatisticsScreen = ({ onClose, isTV = false }) => {
 
   useEffect(() => {
     if (!socket) return;
-    
+
     const fetchStats = () => {
       socket.emit('getStats', (data) => {
         if (data) {
-          setStats({ leaderboard: data.leaderboard || [], history: data.history || [], profiles: data.profiles || [] });
+          setStats({
+            leaderboard: data.leaderboard || [],
+            history: data.history || [],
+            profiles: data.profiles || [],
+          });
         }
         setLoading(false);
       });
@@ -29,139 +60,263 @@ const StatisticsScreen = ({ onClose, isTV = false }) => {
 
     fetchStats();
     socket.on('statsUpdated', fetchStats);
-    
+
     return () => socket.off('statsUpdated', fetchStats);
   }, [socket]);
 
   return (
-    <div className="absolute inset-0 bg-gray-900/95 z-50 flex flex-col p-8 overflow-hidden backdrop-blur-sm">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
-        <h1 className="text-4xl font-black text-white flex items-center space-x-4">
-          <Trophy size={40} className="text-yellow-400" />
-          <span>Salón de la Fama</span>
-        </h1>
-        {!isTV && (
-          <button 
-            onClick={onClose}
-            className="bg-gray-800 hover:bg-gray-700 text-gray-300 p-3 rounded-full transition-colors"
-          >
-            <X size={24} />
-          </button>
-        )}
-      </div>
-
-      <div className={`grid grid-cols-2 gap-2 mb-6 ${isTV ? 'opacity-90 pointer-events-none' : ''}`}>
-        <button 
-          onClick={() => handleTabClick('leaderboard')}
-          className={`flex items-center justify-center space-x-2 p-3 rounded-xl font-bold transition-colors ${activeTab === 'leaderboard' ? 'bg-yellow-500 text-yellow-950' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+    <div
+      role={!isTV ? 'dialog' : undefined}
+      aria-modal={!isTV ? 'true' : undefined}
+      aria-labelledby={!isTV ? titleId : undefined}
+      onClick={(e) => {
+        if (!isTV && e.target === e.currentTarget) onClose?.();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 liquid-backdrop animate-fade-slide-up"
+    >
+      <div
+        className={`liquid-glass-modal rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-5xl h-full max-h-[92dvh] flex flex-col overflow-hidden ${
+          activeTab === 'leaderboard' ? 'liquid-glow-amber' : 'liquid-glow-sky'
+        }`}
+      >
+        {/* Dynamic Sticky Liquid Header */}
+        <div
+          className={`relative z-20 px-5 sm:px-8 transition-all duration-200 border-b border-white/10 ${
+            isScrolled ? 'py-3.5 bg-slate-950/60 backdrop-blur-xl shadow-lg' : 'py-5 sm:py-6'
+          }`}
         >
-          <Medal size={20} className="flex-shrink-0" />
-          <span className="text-sm sm:text-lg truncate">Clasificación</span>
-        </button>
-        <button 
-          onClick={() => handleTabClick('history')}
-          className={`flex items-center justify-center space-x-2 p-3 rounded-xl font-bold transition-colors ${activeTab === 'history' ? 'bg-blue-500 text-blue-950' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-        >
-          <History size={20} className="flex-shrink-0" />
-          <span className="text-sm sm:text-lg truncate">Historial</span>
-        </button>
-      </div>
-
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto bg-gray-800/50 rounded-3xl border border-gray-700 p-6 relative">
-        {loading ? (
-          <div className="flex h-full items-center justify-center text-2xl text-gray-400 animate-pulse">
-            Cargando estadísticas...
-          </div>
-        ) : (
-          <>
+          <div className="flex justify-between items-center gap-4">
+            <h1
+              id={titleId}
+              className={`font-black text-white flex items-center gap-3 tracking-tight transition-all duration-200 ${
+                isScrolled ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-4xl'
+              }`}
+            >
+              <span className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-400/15 border border-amber-300/35 flex items-center justify-center shadow-[0_0_24px_rgba(250,204,21,0.28)] shrink-0">
+                <Trophy size={isScrolled ? 20 : 26} className="text-amber-300" />
+              </span>
+              <span className="truncate">Salón de la Fama</span>
+            </h1>
             {!isTV && (
-              <div className="bg-blue-900/30 border border-blue-800 p-4 rounded-2xl text-center mb-6">
-                <h3 className="text-lg text-blue-400 font-bold">Control Remoto de TV</h3>
-                <p className="text-gray-400 text-sm">Navegar aquí también cambia la vista en la pantalla de la mesa.</p>
-              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Cerrar Salón de la Fama"
+                className="liquid-btn liquid-btn-glass w-10 h-10 rounded-full flex items-center justify-center text-slate-300 hover:text-white shrink-0"
+              >
+                <X size={20} />
+              </button>
             )}
-            {activeTab === 'leaderboard' && (
-              <div className="space-y-4">
-                {stats.leaderboard.length === 0 ? (
-                  <div className="text-center text-gray-500 py-12">Aún no hay partidas registradas.</div>
-                ) : (
-                  stats.leaderboard.map((user, idx) => (
-                    <div key={user.name} className="flex items-center justify-between bg-gray-800 p-4 rounded-2xl border border-gray-700 shadow-md">
-                      <div className="flex items-center space-x-4 sm:space-x-6 overflow-hidden">
-                        <div className={`w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 rounded-full flex items-center justify-center font-black text-lg sm:text-xl ${idx === 0 ? 'bg-yellow-500 text-yellow-950 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : idx === 1 ? 'bg-gray-300 text-gray-800' : idx === 2 ? 'bg-amber-700 text-amber-100' : 'bg-gray-700 text-gray-400'}`}>
-                          #{idx + 1}
-                        </div>
-                        <span className="text-xl sm:text-2xl font-bold text-white truncate">{user.name}</span>
-                      </div>
-                      <div className="text-lg sm:text-xl font-bold text-yellow-400 flex-shrink-0 ml-2">
-                        {user.wins} {isTV ? (user.wins === 1 ? 'Victoria' : 'Victorias') : ''}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+          </div>
 
-            {activeTab === 'history' && (
-              <div className="space-y-4">
-                {stats.history.length === 0 ? (
-                  <div className="text-center text-gray-500 py-12">Aún no hay historial de partidas.</div>
-                ) : (
-                  stats.history.map((game) => (
-                    <div key={game.id} className="bg-gray-800 p-5 rounded-2xl border border-gray-700 shadow-md">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-700 pb-3 mb-3 gap-3">
-                        <div className="flex flex-col items-start gap-1 w-full sm:w-auto">
-                          <span className="text-sm font-bold bg-blue-900 text-blue-300 px-3 py-1 rounded-full truncate max-w-full">{game.presetName || 'Custom'}</span>
-                          <span className="text-xs text-gray-400">{new Date(game.date).toLocaleString()}</span>
-                        </div>
-                        <div className="text-yellow-400 font-bold flex items-center space-x-2 shrink-0">
-                          <Trophy size={16} />
-                          <span className="truncate max-w-[150px] sm:max-w-[200px]">{game.winnerName || 'Empate / Sin Ganador'}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {Object.entries(game.scoresData || {}).map(([name, score]) => (
-                          <div key={name} className="flex justify-between items-center bg-gray-900/50 p-2 rounded-lg">
-                            <span className="text-gray-300 truncate mr-2">{name}</span>
-                            <span className="font-bold text-white">{score}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-                
-                {!isTV && (
-                  <div className="pt-6 border-t border-gray-700 mt-6">
-                    <button 
-                      onClick={() => document.getElementById('addRecordDialog').showModal()}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-all shadow-lg active:scale-95"
-                    >
-                      <span className="text-xl">+ Nuevo Registro al Historial</span>
-                    </button>
-                    
-                    <dialog id="addRecordDialog" className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl backdrop:bg-black/80 max-w-md w-full">
-                      <AddRecordForm onClose={() => document.getElementById('addRecordDialog').close()} profiles={stats.profiles} isTV={isTV} />
-                    </dialog>
+          {/* Segmented Control Tabs */}
+          <div
+            className={`mt-4 grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl liquid-glass-subtle ${
+              isTV ? 'opacity-90 pointer-events-none' : ''
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => handleTabClick('leaderboard')}
+              className={`liquid-btn flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold transition-all ${
+                activeTab === 'leaderboard'
+                  ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 shadow-[0_8px_22px_-6px_rgba(250,204,21,0.65)]'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Medal size={18} className="shrink-0" />
+              <span className="text-sm sm:text-base truncate">Clasificación</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabClick('history')}
+              className={`liquid-btn flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold transition-all ${
+                activeTab === 'history'
+                  ? 'bg-gradient-to-r from-sky-400 to-indigo-500 text-slate-950 shadow-[0_8px_22px_-6px_rgba(56,189,248,0.6)]'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <History size={18} className="shrink-0" />
+              <span className="text-sm sm:text-base truncate">Historial</span>
+            </button>
+          </div>
+
+          {/* Scroll Progress Hairline */}
+          {hasOverflow && (
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/5 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-300 via-sky-400 to-indigo-400 origin-left transition-transform duration-75"
+                style={{ transform: `scaleX(${Math.max(0.03, scrollProgress)})` }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div ref={scrollRef} className="flex-1 liquid-scroll p-5 sm:p-7 relative">
+          {loading ? (
+            <div className="flex h-full min-h-[14rem] flex-col items-center justify-center gap-3 text-slate-300">
+              <div className="w-10 h-10 rounded-full border-2 border-white/15 border-t-amber-300 animate-spin" />
+              <span className="text-lg font-semibold">Cargando estadísticas...</span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {!isTV && (
+                <div className="scroll-reveal-card bg-sky-500/10 border border-sky-400/30 p-4 rounded-2xl flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-sky-400/15 border border-sky-300/30 flex items-center justify-center shrink-0">
+                    <Tv size={18} className="text-sky-300" />
                   </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
+                  <div className="text-left">
+                    <h3 className="text-sm text-sky-200 font-bold">Control Remoto de TV</h3>
+                    <p className="text-slate-300/80 text-xs mt-0.5">
+                      Navegar aquí sincroniza la vista en la pantalla principal de la mesa.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'leaderboard' && (
+                <div className="space-y-3">
+                  {stats.leaderboard.length === 0 ? (
+                    <div className="text-center text-slate-400 py-14 liquid-glass-subtle rounded-2xl">
+                      Aún no hay partidas registradas.
+                    </div>
+                  ) : (
+                    stats.leaderboard.map((user, idx) => (
+                      <div
+                        key={user.name}
+                        className={`scroll-reveal-card flex items-center justify-between liquid-glass-subtle p-4 rounded-2xl transition-colors ${
+                          idx === 0
+                            ? 'border-amber-400/40 bg-amber-400/[0.06]'
+                            : idx === 1
+                              ? 'border-slate-300/25'
+                              : idx === 2
+                                ? 'border-amber-600/35'
+                                : ''
+                        }`}
+                      >
+                        <div className="flex items-center space-x-4 sm:space-x-5 overflow-hidden">
+                          <div
+                            className={`w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-2xl flex items-center justify-center font-black text-base sm:text-lg tabular-nums ${
+                              idx === 0
+                                ? 'bg-gradient-to-br from-amber-300 to-yellow-500 text-amber-950 shadow-[0_0_20px_rgba(250,204,21,0.5)]'
+                                : idx === 1
+                                  ? 'bg-gradient-to-br from-slate-200 to-slate-400 text-slate-900'
+                                  : idx === 2
+                                    ? 'bg-gradient-to-br from-amber-600 to-amber-800 text-amber-100'
+                                    : 'bg-slate-800/90 text-slate-300 border border-white/10'
+                            }`}
+                          >
+                            #{idx + 1}
+                          </div>
+                          <span className="text-lg sm:text-2xl font-extrabold text-white truncate">
+                            {user.name}
+                          </span>
+                        </div>
+                        <div className="text-base sm:text-xl font-black text-amber-300 shrink-0 ml-3 tabular-nums px-3.5 py-1.5 rounded-xl bg-amber-400/10 border border-amber-300/20">
+                          {user.wins}{' '}
+                          {isTV ? (user.wins === 1 ? 'Victoria' : 'Victorias') : '🏆'}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'history' && (
+                <div className="space-y-4">
+                  {stats.history.length === 0 ? (
+                    <div className="text-center text-slate-400 py-14 liquid-glass-subtle rounded-2xl">
+                      Aún no hay historial de partidas.
+                    </div>
+                  ) : (
+                    stats.history.map((game) => (
+                      <div
+                        key={game.id}
+                        className="scroll-reveal-card liquid-glass-subtle p-5 rounded-2xl"
+                      >
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-3 mb-3.5 gap-2.5">
+                          <div className="flex flex-col items-start gap-1 w-full sm:w-auto">
+                            <span className="text-xs font-extrabold uppercase tracking-wider bg-sky-500/20 text-sky-200 border border-sky-400/30 px-3 py-1 rounded-full truncate max-w-full">
+                              {game.presetName || 'Custom'}
+                            </span>
+                            <span className="text-xs text-slate-400 tabular-nums">
+                              {new Date(game.date).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-amber-300 font-extrabold flex items-center gap-2 shrink-0 bg-amber-400/10 border border-amber-300/25 px-3.5 py-1.5 rounded-xl">
+                            <Trophy size={15} />
+                            <span className="truncate max-w-[160px] sm:max-w-[220px] text-sm">
+                              {game.winnerName || 'Empate / Sin Ganador'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                          {Object.entries(game.scoresData || {}).map(([name, score]) => (
+                            <div
+                              key={name}
+                              className="flex justify-between items-center bg-slate-950/55 border border-white/5 px-3 py-2 rounded-xl"
+                            >
+                              <span className="text-slate-300 text-sm truncate mr-2">{name}</span>
+                              <span className="font-black text-white tabular-nums">{score}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {!isTV && (
+                    <div className="pt-4 border-t border-white/10 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddRecordOpen(true)}
+                        className="liquid-btn w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-slate-950 font-extrabold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_14px_32px_-10px_rgba(16,185,129,0.6)]"
+                      >
+                        <Plus size={20} />
+                        <span className="text-base sm:text-lg">Nuevo Registro al Historial</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {!isTV && (
+        <LiquidModal
+          isOpen={isAddRecordOpen}
+          onClose={() => setIsAddRecordOpen(false)}
+          title="Nuevo Registro"
+          subtitle="Registra manualmente el resultado de una partida jugada en mesa."
+          icon={<Trophy size={20} className="text-amber-300" />}
+        >
+          <AddRecordForm
+            isOpen={isAddRecordOpen}
+            onClose={() => setIsAddRecordOpen(false)}
+            profiles={stats.profiles}
+          />
+        </LiquidModal>
+      )}
     </div>
   );
 };
 
-const AddRecordForm = ({ onClose, profiles = [], isTV }) => {
+const AddRecordForm = ({ isOpen, onClose, profiles = [] }) => {
   const { socket } = useSocket();
+  const toast = useToast();
   const [recordPreset, setRecordPreset] = useState('Custom');
   const [recordWinner, setRecordWinner] = useState('');
   const [playerScores, setPlayerScores] = useState([{ name: '', score: '' }]);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setError('');
+    }
+  }, [isOpen]);
 
   const handleAddRecord = (e) => {
     e.preventDefault();
@@ -177,22 +332,27 @@ const AddRecordForm = ({ onClose, profiles = [], isTV }) => {
       }
     }
 
-    socket.emit('addManualRecord', {
-      presetName: recordPreset,
-      winnerName: recordWinner,
-      scores: parsedScores
-    }, (res) => {
-      if (res.success) {
-        alert('Registro añadido con éxito.');
-        setRecordPreset('Custom');
-        setRecordWinner('');
-        setPlayerScores([{ name: '', score: '' }]);
-        onClose();
-        socket.emit('getStats', () => {}); 
-      } else {
-        setError(res.error);
+    socket.emit(
+      'addManualRecord',
+      {
+        presetName: recordPreset,
+        winnerName: recordWinner,
+        scores: parsedScores,
+      },
+      (res) => {
+        if (res.success) {
+          toast.success('Registro añadido al historial con éxito');
+          setRecordPreset('Custom');
+          setRecordWinner('');
+          setPlayerScores([{ name: '', score: '' }]);
+          setError('');
+          onClose();
+          socket.emit('getStats', () => {});
+        } else {
+          setError(res.error);
+        }
       }
-    });
+    );
   };
 
   const addPlayerScore = () => {
@@ -213,84 +373,126 @@ const AddRecordForm = ({ onClose, profiles = [], isTV }) => {
 
   return (
     <form onSubmit={handleAddRecord} className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-white text-xl font-bold">Nuevo Registro</h3>
-        <button type="button" onClick={onClose} className="text-gray-400 hover:text-white"><X size={20}/></button>
-      </div>
-      
-      {error && <div className="text-red-400 text-sm bg-red-900/30 p-2 rounded">{error}</div>}
-      
+      {error && (
+        <div className="text-rose-200 text-sm bg-rose-500/15 border border-rose-400/35 px-3.5 py-2.5 rounded-xl">
+          {error}
+        </div>
+      )}
+
       <div>
-        <label className="block text-gray-400 text-xs mb-1">Nombre del Juego / Preset</label>
-        <input 
-          value={recordPreset} onChange={e => setRecordPreset(e.target.value)}
-          className="w-full bg-gray-900 text-white p-3 rounded-xl border border-gray-700 outline-none focus:border-blue-500" required 
+        <label className="block text-slate-300 text-xs font-bold uppercase tracking-wider mb-1.5">
+          Nombre del Juego / Preset
+        </label>
+        <input
+          value={recordPreset}
+          onChange={(e) => setRecordPreset(e.target.value)}
+          className="liquid-input w-full p-3 rounded-xl text-sm"
+          required
         />
       </div>
-      
+
       <div>
-        <label className="block text-gray-400 text-xs mb-1">Ganador</label>
-        <select 
-          value={recordWinner} 
-          onChange={e => {
+        <label className="block text-slate-300 text-xs font-bold uppercase tracking-wider mb-1.5">
+          Ganador
+        </label>
+        <select
+          value={recordWinner}
+          onChange={(e) => {
             const newWinner = e.target.value;
             setRecordWinner(newWinner);
             if (newWinner !== 'Empate') {
-              const exists = playerScores.find(ps => ps.name === newWinner);
+              const exists = playerScores.find((ps) => ps.name === newWinner);
               if (!exists) {
                 setPlayerScores([{ name: newWinner, score: '' }, ...playerScores]);
               }
             }
           }}
-          className="w-full bg-gray-900 text-white p-3 rounded-xl border border-gray-700 outline-none focus:border-blue-500" required 
+          className="liquid-input w-full p-3 rounded-xl text-sm"
+          required
         >
-          <option value="" disabled>Selecciona al ganador</option>
-          {profiles.map(p => (
-            <option key={p.id} value={p.name}>{p.name}</option>
+          <option value="" disabled>
+            Selecciona al ganador
+          </option>
+          {profiles.map((p) => (
+            <option key={p.id} value={p.name}>
+              {p.name}
+            </option>
           ))}
           <option value="Empate">Empate</option>
         </select>
       </div>
 
       <div>
-        <label className="block text-gray-400 text-xs mb-2">Puntuaciones</label>
-        <div className="space-y-2 max-h-40 overflow-y-auto">
+        <label className="block text-slate-300 text-xs font-bold uppercase tracking-wider mb-2">
+          Puntuaciones
+        </label>
+        <div className="space-y-2 max-h-44 liquid-scroll pr-1">
           {playerScores.map((ps, index) => (
-            <div key={index} className="flex space-x-2 items-center">
-              <select 
-                value={ps.name} onChange={e => updatePlayerScore(index, 'name', e.target.value)}
-                className="flex-1 bg-gray-900 text-white p-2 rounded-xl border border-gray-700 text-sm outline-none" required
+            <div key={index} className="flex gap-2 items-center">
+              <select
+                value={ps.name}
+                onChange={(e) => updatePlayerScore(index, 'name', e.target.value)}
+                className="liquid-input flex-1 p-2.5 rounded-xl text-sm min-w-0"
+                required
               >
-                <option value="" disabled>Jugador</option>
-                {profiles.map(p => (
-                  <option key={p.id} value={p.name}>{p.name}</option>
+                <option value="" disabled>
+                  Jugador
+                </option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
+                  </option>
                 ))}
               </select>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 placeholder="Ptos"
-                value={ps.score} onChange={e => updatePlayerScore(index, 'score', e.target.value)}
-                className="w-20 bg-gray-900 text-white p-2 rounded-xl border border-gray-700 text-sm text-center outline-none" required 
+                value={ps.score}
+                onChange={(e) => updatePlayerScore(index, 'score', e.target.value)}
+                className="liquid-input w-20 p-2.5 rounded-xl text-sm text-center tabular-nums"
+                required
               />
-              <button 
-                type="button" 
-                onClick={() => removePlayerScore(index)} 
+              <button
+                type="button"
+                onClick={() => removePlayerScore(index)}
                 disabled={ps.name === recordWinner && ps.name !== ''}
-                className={`p-2 ${ps.name === recordWinner && ps.name !== '' ? 'text-gray-600 opacity-50 cursor-not-allowed' : 'text-red-500 hover:text-red-400'}`}
+                aria-label="Quitar fila de jugador"
+                className={`p-2 rounded-lg transition-colors ${
+                  ps.name === recordWinner && ps.name !== ''
+                    ? 'text-slate-600 opacity-40 cursor-not-allowed'
+                    : 'text-rose-400 hover:text-rose-300 hover:bg-rose-500/15'
+                }`}
               >
                 <X size={16} />
               </button>
             </div>
           ))}
         </div>
-        <button type="button" onClick={addPlayerScore} className="mt-2 text-sm text-blue-400 font-bold flex items-center hover:text-blue-300">
-          + Añadir Jugador
+        <button
+          type="button"
+          onClick={addPlayerScore}
+          className="mt-2.5 text-sm text-sky-300 font-bold inline-flex items-center gap-1 hover:text-sky-200 transition-colors"
+        >
+          <Plus size={15} />
+          <span>Añadir Jugador</span>
         </button>
       </div>
 
-      <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">
-        Guardar Registro
-      </button>
+      <div className="flex gap-2.5 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="liquid-btn liquid-btn-glass flex-1 py-3.5 rounded-xl font-bold text-slate-200"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          className="liquid-btn flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-slate-950 font-extrabold py-3.5 rounded-xl shadow-[0_10px_24px_-8px_rgba(16,185,129,0.6)]"
+        >
+          Guardar Registro
+        </button>
+      </div>
     </form>
   );
 };
